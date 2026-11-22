@@ -14,3 +14,12 @@ venv/
 
 # IDE
 .vscode/
+
+# Cloned repositories
+workspace/
+# Backups
+*.dump
+*.backup
+
+# Node
+node_modules/
