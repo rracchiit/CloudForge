@@ -3,8 +3,8 @@ name: CloudForge CI
 on:
   push:
     branches:
-      - main
-      - feature/scm-ci
+    - main
+    - develop
 
   pull_request:
     branches:
