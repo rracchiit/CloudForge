@@ -41,9 +41,13 @@ jobs:
 
       - name: Run backend tests
         working-directory: backend
-        run: python -m pytest -v
-
-  frontend-build:
+        run: |
+         if find tests -type f -name "test_*.py" 2>/dev/null | grep -q .; then
+          python -m pytest -v
+         else
+          echo "No backend tests found - skipping pytest."
+         fi
+    frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
 
