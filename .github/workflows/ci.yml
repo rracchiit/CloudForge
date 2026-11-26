@@ -1,3 +1,4 @@
+
 name: CloudForge CI
 
 on:
@@ -5,6 +6,7 @@ on:
     branches:
       - main
       - develop
+
   pull_request:
     branches:
       - main
@@ -40,6 +42,12 @@ jobs:
 
       - name: Run backend tests
         working-directory: backend
+        env:
+          POSTGRES_USER: cloudforge
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: cloudforge_test
         run: python -m pytest -v
 
   frontend-build:
