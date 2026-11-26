@@ -1,4 +1,6 @@
+
 from pathlib import Path
+import ast
 import json
 
 
@@ -7,6 +9,40 @@ def detect_project_type(repository_path: str) -> str:
 
     if not root.exists() or not root.is_dir():
         raise ValueError("Invalid repository directory.")
+
+    ignored = {".git", ".venv", "venv", "node_modules", "__pycache__"}
+
+    # Reject desktop GUI applications.
+    for file in root.rglob("*.py"):
+        if any(part in ignored for part in file.parts):
+            continue
+
+        try:
+            tree = ast.parse(file.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError, OSError):
+            continue
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                if any(alias.name == "tkinter" for alias in node.names):
+                    raise ValueError(
+                        "Tkinter desktop applications are not supported "
+                        "for browser-based deployment."
+                    )
+
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and (
+                    node.module == "tkinter"
+                    or node.module.startswith("tkinter.")
+                ):
+                    raise ValueError(
+                        "Tkinter desktop applications are not supported "
+                        "for browser-based deployment."
+                    )
+
+    # Node.js
+    if (root / "package.json").is_file():
+        return "node"
 
     # Python
     python_files = [
@@ -22,19 +58,52 @@ def detect_project_type(repository_path: str) -> str:
     if any(root.glob("*.py")):
         return "python"
 
-    # Node.js
-    if (root / "package.json").is_file():
-        return "node"
-
-    # Java - Maven
+    # Java
     if (root / "pom.xml").is_file():
         return "maven"
 
-    # Java - Gradle
-    if (root / "build.gradle").is_file() or (root / "build.gradle.kts").is_file():
+    if (
+        (root / "build.gradle").is_file()
+        or (root / "build.gradle.kts").is_file()
+    ):
         return "gradle"
 
     raise ValueError("Unsupported project type.")
+
+
+def validate_existing_dockerfile(repository_path: str) -> str:
+    root = Path(repository_path)
+    dockerfile = root / "Dockerfile"
+
+    if not dockerfile.is_file():
+        raise ValueError("Dockerfile not found.")
+
+    try:
+        content = dockerfile.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise ValueError("Dockerfile cannot be read.")
+
+    instructions = [
+        line.strip().upper()
+        for line in content.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+    has_from = any(line.startswith("FROM ") for line in instructions)
+    has_startup = any(
+        line.startswith("CMD ") or line.startswith("ENTRYPOINT ")
+        for line in instructions
+    )
+
+    if not has_from:
+        raise ValueError("Dockerfile must contain a FROM instruction.")
+
+    if not has_startup:
+        raise ValueError(
+            "Dockerfile must contain a CMD or ENTRYPOINT instruction."
+        )
+
+    return "Existing Dockerfile validated."
 
 
 def generate_dockerfile(repository_path: str) -> str:
@@ -43,14 +112,12 @@ def generate_dockerfile(repository_path: str) -> str:
     if not root.exists() or not root.is_dir():
         raise ValueError("Invalid repository directory.")
 
-    if (root / "Dockerfile").is_file():
-        return "Dockerfile already exists."
-
     project_type = detect_project_type(repository_path)
 
-    # ---------------- PYTHON ----------------
-    if project_type == "python":
+    if (root / "Dockerfile").is_file():
+        return validate_existing_dockerfile(repository_path)
 
+    if project_type == "python":
         if (root / "requirements.txt").is_file():
             dependency_install = """
 COPY requirements.txt .
@@ -80,16 +147,12 @@ EXPOSE 8000
 CMD ["python", "{entrypoint}"]
 """
 
-    # ---------------- NODE ----------------
     elif project_type == "node":
-
-        package_file = root / "package.json"
-
         try:
             package_data = json.loads(
-                package_file.read_text(encoding="utf-8")
+                (root / "package.json").read_text(encoding="utf-8")
             )
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, OSError):
             raise ValueError("Invalid package.json.")
 
         scripts = package_data.get("scripts", {})
@@ -111,7 +174,6 @@ CMD ["python", "{entrypoint}"]
 WORKDIR /app
 
 COPY package*.json ./
-
 RUN npm install
 
 COPY . .
@@ -121,9 +183,7 @@ EXPOSE 3000
 {command}
 """
 
-    # ---------------- MAVEN ----------------
     elif project_type == "maven":
-
         dockerfile_content = """FROM maven:3.9-eclipse-temurin-21
 
 WORKDIR /app
@@ -137,9 +197,7 @@ EXPOSE 8080
 CMD ["sh", "-c", "java -jar target/*.jar"]
 """
 
-    # ---------------- GRADLE ----------------
     elif project_type == "gradle":
-
         dockerfile_content = """FROM gradle:8.10-jdk21
 
 WORKDIR /app
@@ -156,9 +214,7 @@ CMD ["sh", "-c", "java -jar build/libs/*.jar"]
     else:
         raise ValueError("Unsupported project type.")
 
-    dockerfile_path = root / "Dockerfile"
-
-    dockerfile_path.write_text(
+    (root / "Dockerfile").write_text(
         dockerfile_content,
         encoding="utf-8",
     )
