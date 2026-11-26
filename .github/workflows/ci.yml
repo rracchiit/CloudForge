@@ -1,10 +1,11 @@
+
 name: CloudForge CI
 
 on:
   push:
     branches:
-    - main
-    - develop
+      - main
+      - develop
 
   pull_request:
     branches:
@@ -42,12 +43,13 @@ jobs:
       - name: Run backend tests
         working-directory: backend
         run: |
-         if find tests -type f -name "test_*.py" 2>/dev/null | grep -q .; then
-          python -m pytest -v
-         else
-          echo "No backend tests found - skipping pytest."
-         fi
-    frontend-build:
+          if find tests -type f -name "test_*.py" 2>/dev/null | grep -q .; then
+            python -m pytest -v
+          else
+            echo "No backend tests found - skipping pytest."
+          fi
+
+  frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
 
