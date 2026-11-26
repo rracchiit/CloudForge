@@ -41,12 +41,7 @@ jobs:
 
       - name: Run backend tests
         working-directory: backend
-        run: |
-          if [ -d "tests" ]; then
-            pytest -v
-          else
-            echo "No backend tests directory yet - syntax validation passed."
-          fi
+        run: python -m pytest -v
 
   frontend-build:
     name: Frontend Build
