@@ -137,25 +137,34 @@ def restart_docker_container(container_id: str):
         raise RuntimeError(f"Could not restart container: {error}")
 
 
+
 def get_container_status(container_id: str):
-    """Get the current status of a container."""
+    """Get the current status and state details of a container."""
     client = get_docker_client()
 
     try:
         container = client.containers.get(container_id)
         container.reload()
 
+        state = container.attrs.get("State", {})
+
         return {
             "container_id": container.id,
             "container_name": container.name,
-            "status": container.status
+            "status": container.status,
+            "exit_code": state.get("ExitCode"),
+            "error": state.get("Error"),
+            "oom_killed": state.get("OOMKilled", False),
+            "finished_at": state.get("FinishedAt"),
         }
 
     except NotFound:
         raise RuntimeError("Container not found.")
 
     except APIError as error:
-        raise RuntimeError(f"Could not get container status: {error}")
+        raise RuntimeError(
+            f"Could not get container status: {error}"
+        )
 
 
 def get_container_logs(container_id: str):

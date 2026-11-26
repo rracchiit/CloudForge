@@ -121,12 +121,9 @@ def build_application(
         raise HTTPException(400, "Invalid repository directory.")
 
     try:
-        if not (repository_path / "Dockerfile").is_file():
-            generation_result = generate_dockerfile(
-                str(repository_path)
-            )
-        else:
-            generation_result = "Existing Dockerfile detected."
+        generation_result = generate_dockerfile(
+            str(repository_path)
+        )
 
     except ValueError as error:
         raise HTTPException(400, str(error))
@@ -343,6 +340,7 @@ def restart_deployment(
 # DEPLOYMENT STATUS
 # --------------------------------------------------
 
+
 @router.get("/{deployment_id}/status")
 def deployment_status(
     deployment_id: int,
@@ -373,10 +371,25 @@ def deployment_status(
             "container_id": result["container_id"],
             "container_name": result["container_name"],
             "status": result["status"],
+            "exit_code": result["exit_code"],
+            "error": result["error"],
+            "oom_killed": result["oom_killed"],
+            "finished_at": result["finished_at"],
             "deployment_url": deployment.deployment_url,
         }
 
     except RuntimeError as error:
+        if str(error) == "Container not found.":
+            deployment.status = "MISSING"
+            db.commit()
+
+            return {
+                "deployment_id": deployment.id,
+                "status": "MISSING",
+                "container_status": None,
+                "message": "The Docker container no longer exists.",
+            }
+
         raise HTTPException(500, str(error))
 
 
